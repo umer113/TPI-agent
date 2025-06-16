@@ -1,5 +1,5 @@
+from math import ceil
 import os
-import json
 import shutil
 import subprocess
 import asyncio
@@ -9,9 +9,27 @@ import pandas as pd
 import streamlit as st
 from openai import AsyncOpenAI
 from groq import Groq  # your Groq client import
+import json
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import csv
+import io
+
+# ─── New imports for fingerprint check ───
+import requests
+import hashlib
 
 load_dotenv()
 
+FIRST_PAGE_URL = {
+    "DVA Minister":    "https://minister.dva.gov.au/minister-media-releases?page=1",
+    "DVA Veteran Affairs": "https://www.dva.gov.au/about/news/vetaffairs",
+    "DVA Repatriation Commission": "https://www.dva.gov.au/about/overview/repatriation-commission/gwen-cherne-veteran-family-advocate-commissioner/veteran-family-advocate-commissioner-gwen-cherne",
+    "DVA Website About":"https://www.dva.gov.au/about/our-work-response-royal-commission-defence-and-veteran-suicid",
+    "DVA Website Home":"https://clik.dva.gov.au/",
+    "DVA Website Latest News":"https://www.dva.gov.au/about/news/latest-news"
+    # Add one entry per scraper .py filename (without .py)
+}
 
 API_KEY = os.getenv("OPENAI_API_KEY")
 if not API_KEY:
@@ -25,7 +43,6 @@ CHAT_DIR = "chat_history"
 DATA_DIR = "data"
 os.makedirs(CHAT_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
-
 
 # ——— Chat Persistence ———
 def _clean_filename(s: str) -> str:
@@ -60,107 +77,296 @@ def load_chats():
         chats.append({"id": fname[:-5], "messages": msgs})
     return chats
 
-
 # ——— Scraper Runner ———
 def list_scrapers(scraper_dir="scrapers"):
     return [f[:-3] for f in os.listdir(scraper_dir)
             if f.endswith(".py") and not f.startswith("__")]
 
+
+common_headers = {
+    "sec-ch-ua-platform": "Android",
+    "User-Agent": (
+        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N)"
+        " AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0"
+        " Mobile Safari/537.36"
+    ),
+    "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
+    "sec-ch-ua-mobile": "?1",
+}
+
+common_cookies = {
+    "_gid": "GA1.3.1046864615.1743240670",
+    "monsido": "4081743240673336",
+    "_ga_XXXXXXXX": "GS1.1.1743243185.2.1.1743244433.0.0.0",
+    "bm_mi": "3C2F88576EB2B1328DF4957982B85D2D~YAAQvvzUF1LjGqOVAQAAWGSd6Bth1EnnrqM/55ra+zZ0CT0o/"
+             "5KLuglk/gQSB7kCoLjQwgCbOP906LWlWZpl4fyxcq+yuzGM8msirSFwu1nYdAotFYTHknHGqft33p+"
+             "DMIqxmyzvdQzeuYdus7Xtt+oHgGiH8SCgPKX1NtMBWZW5lrG7FfXOfvaS8Odl3AA6lUi25CyUP+fK7"
+             "uNQhboYal3H0DmCqbBPi5mqlDApqeGHtAMdQKrVixy2OwbwEhSMMuabDb2ibFZ+tu0ohB4YO1xQHwc"
+             "FgoOG6YNswq0nSqtQBryENbhxkjofmazHpE8JywMoO2eWWQm3Txnd52nHkh6EaeI=~1",
+    "_gat_gtag_UA_129191797_1": "1",
+    "_gat_gtag_UA_67990327_1": "1",
+    "_ga_MN793G4JHJ": "GS1.1.1743364571.3.0.1743364571.0.0.0",
+    "_ga_FT6SLY9TWT": "GS1.1.1743364376.9.1.1743364574.0.0.0",
+    "_ga_0XT7NFV9ZS": "GS1.1.1743364376.9.1.1743364574.0.0.0",
+    "bm_sv": "AF7F1D971ACA5FD425CC7DC6D72B9CBC~YAAQvvzUF3PjGqOVAQAAJqGg6Buy7dRTKosyL4YNrqYTl"
+             "oJ4Bouxg3EjnJ3fZ0HOiZaZW6nbfsodMC9h0XpffP79Cs0AxpmAR4zH0aL3GIeC4Rhi7ozMlQBhupO"
+             "lz+hXJ55VeO7KgaJtW6ym4VjIN/7yh4uk68j3bp+0VK+4ZudN6dkpyRXhfBQXhrNWcT96qjllYRrY"
+             "EZ6ZZbPI34HZcdPfFJ0xtuu1BJcV0TFWPeeBL7e3zGyCiwLzvkpECEXA~1",
+    "_ga": "GA1.1.1075414505.1743240668",
+}
+
+import random
+# ─── new: your proxy pool ───
+proxies_list = [
+    '91.217.72.56:6785',
+    '103.37.181.190:6846',
+    '45.43.183.159:6471',
+    '64.137.18.245:6439',
+    '104.238.50.211:6757',
+    '89.249.192.133:6532',
+    '103.101.88.235:5959',
+    '145.223.45.130:6983',
+    '45.38.78.112:6049',
+]
+
+def fetch_page_with_proxy(
+    url,
+    proxies_list,
+    headers=None,
+    cookies=None,
+    max_tries=5,
+    timeout=10
+):
+    """
+    Try up to max_tries different proxies from proxies_list
+    until we get a successful (200) response. Returns the
+    requests.Response or raises after exhausting the pool.
+    """
+    tried = set()
+    attempts = min(max_tries, len(proxies_list))
+    for _ in range(attempts):
+        proxy = random.choice(proxies_list)
+        if proxy in tried:
+            continue
+        tried.add(proxy)
+
+        proxy_cfg = {
+            "http":  f"http://{proxy}",
+            "https": f"http://{proxy}"
+        }
+
+        try:
+            resp = requests.get(
+                url,
+                headers=headers,
+                cookies=cookies,
+                proxies=proxy_cfg,
+                timeout=timeout
+            )
+            if resp.status_code == 200:
+                return resp
+            else:
+                # non-200, try another proxy
+                continue
+        except Exception:
+            # timeout, connection error, 403, etc.
+            continue
+
+    # all proxies failed
+    raise RuntimeError(f"All {len(tried)} proxies failed for {url}")
+def get_top_n_listings(
+    url,
+    proxies,
+    headers=None,
+    cookies=None,
+    n=5,
+    max_tries=5,
+    timeout=10
+):
+    """
+    Fetch `url` via proxy‐rotation, parse the first `n` <a class="card"> hrefs (absolute URLs).
+    Returns a list[str] of length <=n.
+    """
+    resp = fetch_page_with_proxy(
+        url,
+        proxies_list=proxies,
+        headers=headers,
+        cookies=cookies,
+        max_tries=max_tries,
+        timeout=timeout
+    )
+    soup = BeautifulSoup(resp.text, "html.parser")
+    anchors = soup.select("a.card")[:n]
+    return [urljoin(url, a["href"]) for a in anchors if a.get("href")]
+
 def run_scraper(module_name, scraper_dir="scrapers"):
+    # 1) peek at top-5 listing URLs
+    url      = FIRST_PAGE_URL.get(module_name)
+    meta_json = os.path.join(DATA_DIR, f"{module_name}_top5.json")
+    top5     = None
+
+    if url:
+        try:
+            top5 = get_top_n_listings(
+                url,
+                proxies=proxies_list,
+                headers=common_headers,
+                cookies=common_cookies,
+                n=5
+            )
+
+            # if we've seen this exact top-5 before, skip
+            if os.path.exists(meta_json):
+                with open(meta_json, "r") as f:
+                    old_top5 = json.load(f)
+                if old_top5 == top5:
+                    st.sidebar.info("✅ No new updates detected. Your dataset is already current, so the scrape has been skipped.")
+                    return
+
+            # otherwise store the new top-5
+            with open(meta_json, "w") as f:
+                json.dump(top5, f, indent=2)
+
+        except Exception as e:
+            st.sidebar.warning(f"Top-5 fetch failed: {e}\n→ running full scrape anyway.")
+
+    # 2) run the actual scraper script
     before = set(os.listdir(DATA_DIR))
-    path = os.path.join(scraper_dir, f"{module_name}.py")
+    script = os.path.join(scraper_dir, f"{module_name}.py")
     try:
-        subprocess.run(["python", path], check=True)
+        subprocess.run(["python", script], check=True)
     except Exception as e:
         st.sidebar.error(f"Scraper error: {e}")
         return
-    new_files = set(os.listdir(DATA_DIR)) - before
-    if new_files:
-        for fn in new_files:
+
+    # 3) report new CSV(s)
+    added = set(os.listdir(DATA_DIR)) - before
+    if added:
+        for fn in added:
             st.sidebar.success(f"New CSV: {fn}")
     else:
         st.sidebar.info("No CSV produced.")
 
 
-def estimate_tokens(text):
-    return len(text.split()) * 1.3  # approximate token count
+import tiktoken
 
-async def ask_agent(csv_text: str, question: str, model: str):
-    system_prompt = """
-You are ChatGPT, a large language model trained by OpenAI.
-You respond in a friendly, conversational style—clear, concise, and helpful—just like the ChatGPT interface.
+groq_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-Your task is to use the provided CSV data to comprehensively address the user's query. You may summarize, explain, or generate insightful content based entirely on the CSV data. 
-• Do not include any facts that aren't explicitly or implicitly supported by the CSV.
-• If the data does not contain relevant information to answer the query, explicitly state this.
-"""
-    MAX_TOKENS = 14000
-    client = None
-    is_groq = model.startswith("meta-llama/")
-    combined_response = ""
+async def ask_agent(csv_text: str, question: str, model: str, chat_history: list) -> str:
+    """
+    Use provided CSV data and conversation history to answer the user's question.
+    If the CSV is too large for a single prompt, chunk it dynamically,
+    process each chunk, then synthesize a final coherent response.
+    """
+    # Determine backend
+    use_groq = model.startswith("meta-llama/")
 
-    # Estimate total tokens
-    total_tokens = estimate_tokens(csv_text + question + system_prompt)
+    # Initialize tokenizer
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("p50k_base" if use_groq else "cl100k_base")
 
-    if total_tokens <= MAX_TOKENS:
-        user_prompt = f"### CSV Data:\n{csv_text}\n\n### User Question:\n{question}"
-        if is_groq:
-            client = Groq(api_key=GROQ_API_KEY)
+    def count_tokens(text: str) -> int:
+        return len(encoding.encode(text))
+
+    # Enhanced system prompt for clarity and structure
+    system_prompt = (
+        "You are a data-savvy AI assistant. "
+        "Using ONLY the provided CSV data and conversation history, respond clearly and accurately to the user’s question. "
+        "- Reference relevant rows or columns explicitly. "
+        "- Present findings in a structured format (e.g., bullet points, numbered lists, or short paragraphs). "
+        "- Do not assume any data not in the CSV. "
+        "- If information is missing, state it clearly."
+    )
+
+    # Build conversation history
+    history_context = "".join(
+        f"{('User' if m['role']=='user' else 'Assistant')}: {m['content']}\n\n"
+        for m in chat_history
+    )
+
+    # Token budget settings
+    MODEL_MAX = 16385
+    HEADROOM = 512
+    usable_tokens = MODEL_MAX - HEADROOM
+
+    # Calculate static token usage
+    static_tokens = (
+        count_tokens(system_prompt)
+        + count_tokens("### Conversation History:\n")
+        + count_tokens(history_context)
+        + count_tokens("### User Question:\n")
+        + count_tokens(question)
+    )
+
+    # Async helpers for each backend
+    async def send_chat(prompt: str) -> str:
+        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return resp.choices[0].message.content.strip()
+
+    async def send_groq(prompt: str) -> str:
+        def run_sync():
+            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
             resp = client.chat.completions.create(
-                model=model,
+                model=groq_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": prompt}
                 ]
             )
             return resp.choices[0].message.content.strip()
-        else:
-            client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-            resp = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            return resp.choices[0].message.content.strip()
+        return await asyncio.to_thread(run_sync)
 
-    # If CSV too long, chunk it
-    lines = csv_text.strip().split("\n")
-    header = lines[0]
-    rows = lines[1:]
-    chunk_size = max(10, len(rows) // ceil(total_tokens / MAX_TOKENS))
-    chunks = [rows[i:i+chunk_size] for i in range(0, len(rows), chunk_size)]
+    # Helper to build the user prompt
+    def make_prompt(csv_section: str) -> str:
+        return (
+            f"### Conversation History:\n{history_context}"
+            f"### CSV Data:\n{csv_section}\n\n"
+            f"### User Question:\n{question}"
+        )
 
-    for i, chunk_rows in enumerate(chunks):
-        chunk_csv = header + "\n" + "\n".join(chunk_rows)
-        user_prompt = f"### CSV Data:\n{chunk_csv}\n\n### User Question:\n{question}"
-        if is_groq:
-            if client is None:
-                client = Groq(api_key=GROQ_API_KEY)
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            part = resp.choices[0].message.content.strip()
-        else:
-            if client is None:
-                client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-            resp = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            part = resp.choices[0].message.content.strip()
+    # Attempt one-shot
+    full_prompt = make_prompt(csv_text)
+    if static_tokens + count_tokens(full_prompt) <= usable_tokens:
+        return await (send_groq(full_prompt) if use_groq else send_chat(full_prompt))
 
-        combined_response += f"\n\n--- Part {i+1} ---\n\n{part}"
+    # Otherwise, split into manageable chunks
+    lines = csv_text.split("\n")
+    header, rows = lines[0], lines[1:]
+    avg_tokens_per_row = max(1, count_tokens("\n".join(rows)) // len(rows))
+    rows_per_chunk = max(1, (usable_tokens - static_tokens) // avg_tokens_per_row)
 
-    return combined_response.strip()
+    # Adjust chunk size
+    while True:
+        chunks = [rows[i:i+rows_per_chunk] for i in range(0, len(rows), rows_per_chunk)]
+        if all(
+            static_tokens + count_tokens(make_prompt(header + "\n" + "\n".join(chunk))) <= usable_tokens
+            for chunk in chunks
+        ):
+            break
+        rows_per_chunk = max(1, rows_per_chunk // 2)
+
+    # Process chunks
+    partials = []
+    for chunk in chunks:
+        prompt = make_prompt(header + "\n" + "\n".join(chunk))
+        part = await (send_groq(prompt) if use_groq else send_chat(prompt))
+        partials.append(part)
+
+    # Synthesize final answer
+    synthesis = (
+        "Please combine the following partial responses into a single, well-structured answer to the user's question:\n\n"
+        + "\n---\n".join(partials)
+    )
+    return await (send_groq(synthesis) if use_groq else send_chat(synthesis))
 
 
 # ——— Streamlit App ———
@@ -179,7 +385,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("🕸️ TPI")
+    st.title("🕸️ TPI Overwatch AI")
 
     if "query" not in st.session_state:
         st.session_state["query"] = ""
@@ -203,12 +409,10 @@ def main():
         index=default_idx,
         key="chat_select"
     )
-    if sel != "🆕 New Chat":
-        idx = options.index(sel) - 1
-        st.session_state.chat_id = chats[idx]["id"]
-        st.session_state.chat_history = chats[idx]["messages"].copy()
-    else:
-        # ─── Generate unique timestamp-based title ───
+    if sel == "🆕 New Chat":
+        # Reset context for new chat
+        st.session_state.chat_id = None
+        st.session_state.chat_history = []
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         existing_titles = {c.get("title", "") for c in chats}
         unique_ts = ts
@@ -216,36 +420,33 @@ def main():
         while unique_ts in existing_titles:
             unique_ts = f"{ts}_{counter}"
             counter += 1
-
-        st.session_state.chat_id = None
-        st.session_state.chat_history = []
         st.session_state["new_chat_title"] = unique_ts
+    else:
+        idx = options.index(sel) - 1
+        st.session_state.chat_id = chats[idx]["id"]
+        st.session_state.chat_history = chats[idx]["messages"].copy()
 
     # ─── 2. Scraper & Model ───
     st.sidebar.header("🕷️ Run Scraper")
     raw_model = st.sidebar.selectbox(
         "Model",
-        ["gpt-3.5-turbo-16k", "gpt-4", "Groq"],
+        ["gpt-3.5-turbo-16k", "Groq"],
         key="model_select"
     )
-    # Map the "Groq" label to the actual Groq model name
     model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
 
     scrapers = list_scrapers()
-    choice   = st.sidebar.selectbox("Select scraper", scrapers)
+    choice = st.sidebar.selectbox("Select scraper", scrapers)
 
     if st.sidebar.button("Run Scraper"):
         df = run_scraper(choice)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Case 1: scraper returned a DataFrame
         if isinstance(df, pd.DataFrame):
             fn = f"{choice}_{ts}.csv"
             os.makedirs("data", exist_ok=True)
             df.to_csv(os.path.join("data", fn), index=False)
             st.sidebar.success(f"Saved {fn}")
-
-        # Case 2: scraper wrote its own CSV named "<choice>.csv"
         elif df is None:
             src = f"{choice}.csv"
             if os.path.exists(src):
@@ -255,8 +456,6 @@ def main():
                 st.sidebar.success(f"Scraping done {src} → data/{fn}")
             else:
                 st.sidebar.error(f"No DataFrame returned and `{src}` not found.")
-
-        # Case 3: neither DataFrame nor fallback file
         else:
             st.sidebar.error("Scraper did not return a DataFrame.")
 
@@ -279,8 +478,11 @@ def main():
     df = pd.read_csv(os.path.join("data", sel_file))
 
     # ─── Main UI: Show Dataset & Ask Agent ───
+    st.subheader(f"Dataset: {sel_file}")
+    st.dataframe(df)
+    st.markdown("---")
 
-    # ─── 4. Predefined Prompts ───
+    # ─── Predefined Prompts ───
     st.sidebar.header("Predefined Prompts")
     predef_prompts = [
         "Summarize the key insights from this dataset.",
@@ -298,16 +500,7 @@ def main():
             args=(p,)
         )
 
-    # ─── 5. Show Dataset ───
-    df = pd.read_csv(os.path.join(DATA_DIR, sel_file))
-    st.subheader(f"Dataset: {sel_file}")
-    st.dataframe(df)        # <-- let Streamlit fill the column
-    st.markdown("---")
-
-    # ─── 6. Chat Form ───
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
+    # ─── Chat Form ───
     with st.form("chat_form", clear_on_submit=False):
         query = st.text_input("Ask anything—article, summary, insight…", key="query")
         submitted = st.form_submit_button("Ask Agent")
@@ -315,7 +508,7 @@ def main():
             st.session_state.chat_history.append({"role": "user", "content": query})
             csv_text = df.to_csv(index=False)
             with st.spinner("🤖 Agent is thinking..."):
-                answer = asyncio.run(ask_agent(csv_text, query, model))
+                answer = asyncio.run(ask_agent(csv_text, query, model, st.session_state.chat_history))
             st.session_state.chat_history.append({"role": "assistant", "content": answer})
             csv_basename = os.path.splitext(sel_file)[0]
             chat_title = st.session_state.get("new_chat_title", "untitled")
@@ -326,13 +519,12 @@ def main():
                 title=chat_title
             )
             st.session_state.chat_id = new_id
-            st.session_state.chat_id = new_id
             try:
                 st.experimental_rerun()
             except AttributeError:
                 st.rerun()
 
-    # ─── 7. Display Chat ───
+    # ─── Display Chat ───
     for msg in st.session_state.chat_history:
         if msg["role"] == "user":
             st.markdown(f'<div class="user-message">👤 {msg["content"]}</div>', unsafe_allow_html=True)
@@ -340,7 +532,6 @@ def main():
             st.markdown(f"**🤖** {msg['content']}")
 
     st.markdown("---")
-
 
 if __name__ == "__main__":
     main()
