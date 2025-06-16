@@ -82,13 +82,8 @@ def run_scraper(module_name, scraper_dir="scrapers"):
         st.sidebar.info("No CSV produced.")
 
 
-import tiktoken  # for token estimation
-from math import ceil
-
 def estimate_tokens(text):
-    # Use tiktoken to estimate token length (safe fallback)
-    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")  # Works for most models
-    return len(enc.encode(text))
+    return len(text.split()) * 1.3  # approximate token count
 
 async def ask_agent(csv_text: str, question: str, model: str):
     system_prompt = """
