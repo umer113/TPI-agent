@@ -6,13 +6,35 @@ import time
 
 # ——— Proxy Configuration ———
 proxies = [
-    'http://beqcfgqd:zx2ta8sl24bs@85.204.255.7:6422',
-    'http://beqcfgqd:zx2ta8sl24bs@64.43.90.225:6740',
-    'http://beqcfgqd:zx2ta8sl24bs@82.153.248.29:5405',
-    'http://beqcfgqd:zx2ta8sl24bs@145.223.51.147:6680',
-    'http://beqcfgqd:zx2ta8sl24bs@150.107.202.103:6720',
+    'http://beqcfgqd:zx2ta8sl24bs@66.225.236.89:6118',
+    'http://beqcfgqd:zx2ta8sl24bs@45.39.2.114:6546',
+    'http://beqcfgqd:zx2ta8sl24bs@104.252.194.86:6995',
+    'http://beqcfgqd:zx2ta8sl24bs@45.84.44.108:5586',
+    'http://beqcfgqd:zx2ta8sl24bs@104.233.20.188:6204',
+    'http://beqcfgqd:zx2ta8sl24bs@166.0.6.18:5979',
+    'http://beqcfgqd:zx2ta8sl24bs@89.116.71.120:6086',
+    'http://beqcfgqd:zx2ta8sl24bs@94.177.21.47:5416',
     'http://beqcfgqd:zx2ta8sl24bs@172.245.158.37:5990',
+    'http://beqcfgqd:zx2ta8sl24bs@198.23.214.31:6298',
+    'http://beqcfgqd:zx2ta8sl24bs@43.245.117.205:5789',
+    'http://beqcfgqd:zx2ta8sl24bs@45.43.82.199:6193',
+    'http://beqcfgqd:zx2ta8sl24bs@104.238.8.28:5886',
+    'http://beqcfgqd:zx2ta8sl24bs@145.223.41.229:6500',
+    'http://beqcfgqd:zx2ta8sl24bs@193.161.2.176:6599',
+    'http://beqcfgqd:zx2ta8sl24bs@45.250.64.94:5731',
+    'http://beqcfgqd:zx2ta8sl24bs@194.5.3.85:5597',
+    'http://beqcfgqd:zx2ta8sl24bs@82.24.225.210:8051',
+    'http://beqcfgqd:zx2ta8sl24bs@104.239.40.34:6653',
+    'http://beqcfgqd:zx2ta8sl24bs@191.101.25.152:6549',
+    'http://beqcfgqd:zx2ta8sl24bs@216.173.109.172:6403',
+    'http://beqcfgqd:zx2ta8sl24bs@173.211.69.3:6596',
+    'http://beqcfgqd:zx2ta8sl24bs@191.101.11.25:6423',
+    'http://beqcfgqd:zx2ta8sl24bs@209.242.203.142:6857',
+    'http://beqcfgqd:zx2ta8sl24bs@161.123.101.69:6695',
+    'http://beqcfgqd:zx2ta8sl24bs@38.153.136.82:5105',
+    'http://beqcfgqd:zx2ta8sl24bs@104.222.187.190:6314'
 ]
+
 proxy_pool = cycle(proxies)
 
 # ——— Headers ———
