@@ -273,8 +273,9 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
     )
 
     async def send_chat(prompt: str) -> str:
-       client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"),
-                            http_client=AsyncHttpxClientWrapper()
+        client = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            http_client=AsyncHttpxClientWrapper()
         )
         resp = await client.chat.completions.create(
             model=model,
@@ -284,6 +285,7 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
             ]
         )
         return resp.choices[0].message.content.strip()
+
 
     async def send_groq(prompt: str) -> str:
         def run_sync():
