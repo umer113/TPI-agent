@@ -430,67 +430,71 @@ def main():
         key="chat_select"
     )
     if sel == "🆕 New Article Thread":
-            st.session_state.chat_id = None
-            st.session_state.chat_history = []
-            st.session_state["new_chat_title"] = None
+        st.session_state.chat_id = None
+        st.session_state.chat_history = []
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        existing_titles = {c.get("title", "") for c in chats}
+        unique_ts = ts
+        counter = 1
+        while unique_ts in existing_titles:
+            unique_ts = f"{ts}_{counter}"
+            counter += 1
+        st.session_state["new_chat_title"] = unique_ts
     else:
         idx = options.index(sel) - 1
         st.session_state.chat_id = chats[idx]["id"]
         st.session_state.chat_history = chats[idx]["messages"].copy()
-    
-        # raw_model = st.sidebar.selectbox(
-        #     "Model",
-        #     ["gpt-3.5-turbo-16k", "Groq"],
-        #     key="model_select"
-        # )
-        # model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
-    
-        st.subheader(f"Dataset: {sel_file}")
-        st.dataframe(df)
-        st.markdown("---")
-    
-        st.sidebar.header("Predefined Prompts")
-        predef_prompts = [
-            "Summarize the key insights from this dataset.",
-            "Write a comprehensive article based on this dataset, weaving in key insights, context, and potential implications.",
-            "Give me a narrative overview of what this data represents."
-        ]
-        def _set_query(p):
-            st.session_state["query"] = p
-    
-        for i, p in enumerate(predef_prompts):
-            st.sidebar.button(
-                p,
-                key=f"predef_{i}",
-                on_click=_set_query,
-                args=(p,)
+
+    # raw_model = st.sidebar.selectbox(
+    #     "Model",
+    #     ["gpt-3.5-turbo-16k", "Groq"],
+    #     key="model_select"
+    # )
+    # model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
+
+    st.subheader(f"Dataset: {sel_file}")
+    st.dataframe(df)
+    st.markdown("---")
+
+    st.sidebar.header("Predefined Prompts")
+    predef_prompts = [
+        "Summarize the key insights from this dataset.",
+        "Write a comprehensive article based on this dataset, weaving in key insights, context, and potential implications.",
+        "Give me a narrative overview of what this data represents."
+    ]
+    def _set_query(p):
+        st.session_state["query"] = p
+
+    for i, p in enumerate(predef_prompts):
+        st.sidebar.button(
+            p,
+            key=f"predef_{i}",
+            on_click=_set_query,
+            args=(p,)
+        )
+
+    with st.form("chat_form", clear_on_submit=False):
+        query = st.text_input("Ask anything—article, summary, insight…", key="query")
+        submitted = st.form_submit_button("Ask Agent")
+        if submitted and query:
+            st.session_state.chat_history.append({"role": "user", "content": query})
+            csv_text = df.to_csv(index=False)
+            with st.spinner("🤖 Agent is thinking..."):
+                answer = asyncio.run(ask_agent(csv_text, query, model, st.session_state.chat_history))
+            st.session_state.chat_history.append({"role": "assistant", "content": answer})
+            csv_basename = os.path.splitext(sel_file)[0]
+            chat_title = st.session_state.get("new_chat_title", "untitled")
+
+            new_id = save_chat(
+                st.session_state.chat_history,
+                chat_id=st.session_state.get("chat_id"),
+                title=chat_title
             )
-    
-        with st.form("chat_form", clear_on_submit=False):
-            query = st.text_input("Ask anything—article, summary, insight…", key="query")
-            submitted = st.form_submit_button("Ask Agent")
-            if submitted and query:
-                st.session_state.chat_history.append({"role": "user", "content": query})
-                csv_text = df.to_csv(index=False)
-                with st.spinner("🤖 Agent is thinking..."):
-                    answer = asyncio.run(ask_agent(csv_text, query, model, st.session_state.chat_history))
-                st.session_state.chat_history.append({"role": "assistant", "content": answer})
-                csv_basename = os.path.splitext(sel_file)[0]
-                if st.session_state.get("new_chat_title") is None:
-                    st.session_state["new_chat_title"] = query[:50]  # Trim if too long
-    
-                chat_title = st.session_state["new_chat_title"]
-    
-                new_id = save_chat(
-                    st.session_state.chat_history,
-                    chat_id=st.session_state.get("chat_id"),
-                    title=chat_title
-                )
-                st.session_state.chat_id = new_id
-                try:
-                    st.experimental_rerun()
-                except AttributeError:
-                    st.rerun()
+            st.session_state.chat_id = new_id
+            try:
+                st.experimental_rerun()
+            except AttributeError:
+                st.rerun()
 
     # ——— Display Chat with Download Buttons ———
     for i, msg in enumerate(st.session_state.chat_history):
