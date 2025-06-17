@@ -432,14 +432,7 @@ def main():
     if sel == "🆕 New Article Thread":
         st.session_state.chat_id = None
         st.session_state.chat_history = []
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        existing_titles = {c.get("title", "") for c in chats}
-        unique_ts = ts
-        counter = 1
-        while unique_ts in existing_titles:
-            unique_ts = f"{ts}_{counter}"
-            counter += 1
-        st.session_state["new_chat_title"] = unique_ts
+        st.session_state["new_chat_title"] = None
     else:
         idx = options.index(sel) - 1
         st.session_state.chat_id = chats[idx]["id"]
@@ -483,7 +476,10 @@ def main():
                 answer = asyncio.run(ask_agent(csv_text, query, model, st.session_state.chat_history))
             st.session_state.chat_history.append({"role": "assistant", "content": answer})
             csv_basename = os.path.splitext(sel_file)[0]
-            chat_title = st.session_state.get("new_chat_title", "untitled")
+            if st.session_state.get("new_chat_title") is None:
+                st.session_state["new_chat_title"] = query[:50]  # Trim if too long
+
+            chat_title = st.session_state["new_chat_title"]
 
             new_id = save_chat(
                 st.session_state.chat_history,
