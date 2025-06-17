@@ -234,8 +234,6 @@ import tiktoken
 
 groq_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-from openai._httpx_client import AsyncHttpxClientWrapper
-
 async def ask_agent(csv_text: str, question: str, model: str, chat_history: list) -> str:
     use_groq = model.startswith("meta-llama/")
     try:
