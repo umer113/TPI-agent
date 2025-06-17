@@ -40,6 +40,7 @@ PAGE_URL = BASE_URL + "/minister-media-releases?page={}"
 def scrape_article(full_url):
     proxy = next(proxy_pool)
     try:
+        print("running")
         response = requests.get(full_url, headers=headers, proxies={"http": proxy, "https": proxy}, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
