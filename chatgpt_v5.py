@@ -38,7 +38,6 @@ if not API_KEY:
     st.stop()
 
 OPENAI_API_KEY = API_KEY
-print(f"open ai key: {OPENAI_API_KEY}")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 CHAT_DIR = "chat_history"
