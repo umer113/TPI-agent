@@ -234,6 +234,8 @@ import tiktoken
 
 groq_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
+from openai._httpx_client import AsyncHttpxClientWrapper
+
 async def ask_agent(csv_text: str, question: str, model: str, chat_history: list) -> str:
     use_groq = model.startswith("meta-llama/")
     try:
@@ -271,7 +273,9 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
     )
 
     async def send_chat(prompt: str) -> str:
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+       client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"),
+                            http_client=AsyncHttpxClientWrapper()
+        )
         resp = await client.chat.completions.create(
             model=model,
             messages=[
