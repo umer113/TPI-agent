@@ -18,6 +18,7 @@ import io
 # ─── New imports for fingerprint check ───
 import requests
 import hashlib
+import sys
 
 load_dotenv()
 
@@ -234,7 +235,7 @@ def run_scraper(module_name, scraper_dir="scrapers"):
     before = set(os.listdir(DATA_DIR))
     script = os.path.join(scraper_dir, f"{module_name}.py")
     try:
-        subprocess.run(["python", script], check=True)
+        subprocess.run([sys.executable, script], check=True)
     except Exception as e:
         st.sidebar.error(f"Scraper error: {e}")
         return
