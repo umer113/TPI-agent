@@ -32,7 +32,7 @@ FIRST_PAGE_URL = {
     "DVA Website Latest News":"https://www.dva.gov.au/about/news/latest-news"
 }
 
-API_KEY = os.getenv("OPENAI_API_KEY")
+API_KEY = os.getenv("OPEN_AI_API_KEY")
 if not API_KEY:
     st.error("Please set the OPENAI_API_KEY in your .env file.")
     st.stop()
