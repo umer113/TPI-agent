@@ -123,10 +123,9 @@ with open(csv_filename, mode='w', newline='', encoding='utf-8') as file:
     writer = csv.DictWriter(file, fieldnames=csv_headers)
     writer.writeheader()
 
-    for page in range(5):  # Adjust range as needed
-        print(f"\n--- Fetching page {page} ---")
-        page_articles = fetch_page_data(page)
-        if page_articles:
-            writer.writerows(page_articles)
+    print("\n--- Fetching first page ---")
+    page_articles = fetch_page_data(0)
+    if page_articles:
+        writer.writerows(page_articles)
 
 print("\n✅ Done. All data saved to CSV.")
