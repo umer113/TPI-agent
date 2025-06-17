@@ -3,17 +3,17 @@ from itertools import cycle
 from bs4 import BeautifulSoup
 import csv
 proxies_list = [
-    '176.113.66.110:5791',
-    '66.225.236.89:6118',
-    '94.177.21.47:5416',
-    '85.204.255.7:6422',
-    '64.43.90.225:6740',
-    '82.153.248.29:5405',
-    '145.223.51.147:6680',
-    '150.107.202.103:6720',
-    '172.245.158.37:5990',
-   
+    'https://beqcfgqd:zx2ta8sl24bs@176.113.66.110:5791',
+    'https://beqcfgqd:zx2ta8sl24bs@66.225.236.89:6118',
+    'https://beqcfgqd:zx2ta8sl24bs@94.177.21.47:5416',
+    'https://beqcfgqd:zx2ta8sl24bs@85.204.255.7:6422',
+    'https://beqcfgqd:zx2ta8sl24bs@64.43.90.225:6740',
+    'https://beqcfgqd:zx2ta8sl24bs@82.153.248.29:5405',
+    'https://beqcfgqd:zx2ta8sl24bs@145.223.51.147:6680',
+    'https://beqcfgqd:zx2ta8sl24bs@150.107.202.103:6720',
+    'https://beqcfgqd:zx2ta8sl24bs@172.245.158.37:5990',
 ]
+
 proxy_pool = cycle(proxies_list)
 headers = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
