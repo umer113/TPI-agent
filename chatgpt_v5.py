@@ -433,10 +433,10 @@ def main():
             st.session_state.chat_id = None
             st.session_state.chat_history = []
             st.session_state["new_chat_title"] = None
-        else:
-            idx = options.index(sel) - 1
-            st.session_state.chat_id = chats[idx]["id"]
-            st.session_state.chat_history = chats[idx]["messages"].copy()
+    else:
+        idx = options.index(sel) - 1
+        st.session_state.chat_id = chats[idx]["id"]
+        st.session_state.chat_history = chats[idx]["messages"].copy()
     
         # raw_model = st.sidebar.selectbox(
         #     "Model",
