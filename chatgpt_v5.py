@@ -245,13 +245,13 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
         return len(encoding.encode(text))
 
     system_prompt = (
-        "You are a data-savvy AI assistant. "
-        "Using ONLY the provided CSV data and conversation history, respond clearly and accurately to the user’s question. "
-        "- Reference relevant rows or columns explicitly. "
-        "- Present findings in a structured format (e.g., bullet points, numbered lists, or short paragraphs). "
-        "- Do not assume any data not in the CSV. "
-        "- If information is missing, state it clearly."
+        "You are ChatGPT — a helpful, intelligent, and articulate AI assistant. "
+        "Engage with the user naturally, just like ChatGPT does. You can answer questions, explain concepts, write summaries or articles, and offer insights or ideas. "
+        "Use the provided CSV dataset when it’s relevant, referencing specific rows or columns to support your answers — but you're not restricted to it. "
+        "Always consider the full conversation history to give context-aware, coherent, and smart responses. "
+        "Be clear, creative, and conversational. If information is missing or uncertain, say so honestly instead of guessing."
     )
+
 
     history_context = "".join(
         f"{('User' if m['role']=='user' else 'Assistant')}: {m['content']}\n\n"
@@ -367,14 +367,6 @@ def main():
     scrapers = list_scrapers()
     choice = st.sidebar.selectbox("Select Source", scrapers)
 
-    raw_model = st.sidebar.selectbox(
-        "Model",
-        ["gpt-3.5-turbo-16k", "Groq"],
-        key="model_select"
-    )
-    model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
-
-
     if st.sidebar.button("Fetch Latest Content"):
         df = run_scraper(choice)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -395,6 +387,14 @@ def main():
                 st.sidebar.error(f"No DataFrame returned and `{src}` not found.")
         else:
             st.sidebar.error("Scraper did not return a DataFrame.")
+
+    raw_model = st.sidebar.selectbox(
+        "Model",
+        ["gpt-3.5-turbo-16k", "Groq"],
+        key="model_select"
+    )
+    model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
+
 
     files = sorted(
         [f for f in os.listdir("data") if f.lower().endswith(".csv")],
