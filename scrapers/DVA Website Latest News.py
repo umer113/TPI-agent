@@ -73,7 +73,7 @@ with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
     writer = csv.DictWriter(file, fieldnames=csv_fields)
     writer.writeheader()
 
-    for page in range(112):
+    for page in range(1):
         print(f"\n========== Page {page} ==========")
         page_url = f"{listing_url}?page={page}"
         page_html = fetch_request(page_url)
