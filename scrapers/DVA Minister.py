@@ -6,12 +6,12 @@ import time
 
 # ——— Proxy Configuration ———
 proxies = [
-    '85.204.255.7:6422',
-    '64.43.90.225:6740',
-    '82.153.248.29:5405',
-    '145.223.51.147:6680',
-    '150.107.202.103:6720',
-    '172.245.158.37:5990',
+    'beqcfgqd:zx2ta8sl24bs@85.204.255.7:6422',
+    'beqcfgqd:zx2ta8sl24bs@64.43.90.225:6740',
+    'beqcfgqd:zx2ta8sl24bs@82.153.248.29:5405',
+    'beqcfgqd:zx2ta8sl24bs@145.223.51.147:6680',
+    'beqcfgqd:zx2ta8sl24bs@150.107.202.103:6720',
+    'beqcfgqd:zx2ta8sl24bs@172.245.158.37:5990',
 ]
 proxy_pool = cycle(proxies)
 
