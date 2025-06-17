@@ -1,3 +1,4 @@
+
 from math import ceil
 import os
 import shutil
@@ -8,17 +9,17 @@ from dotenv import load_dotenv
 import pandas as pd
 import streamlit as st
 from openai import AsyncOpenAI
-from groq import Groq  # your Groq client import
+from groq import Groq
 import json
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import csv
 import io
-
-# ─── New imports for fingerprint check ───
 import requests
 import hashlib
 import sys
+from docx import Document  # New import for creating .docx files
+from io import BytesIO  # For handling in-memory file
 
 load_dotenv()
 
@@ -29,7 +30,6 @@ FIRST_PAGE_URL = {
     "DVA Website About":"https://www.dva.gov.au/about/our-work-response-royal-commission-defence-and-veteran-suicid",
     "DVA Website Home":"https://clik.dva.gov.au/",
     "DVA Website Latest News":"https://www.dva.gov.au/about/news/latest-news"
-    # Add one entry per scraper .py filename (without .py)
 }
 
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -83,7 +83,6 @@ def list_scrapers(scraper_dir="scrapers"):
     return [f[:-3] for f in os.listdir(scraper_dir)
             if f.endswith(".py") and not f.startswith("__")]
 
-
 common_headers = {
     "sec-ch-ua-platform": "Android",
     "User-Agent": (
@@ -117,7 +116,6 @@ common_cookies = {
 }
 
 import random
-# ─── new: your proxy pool ───
 proxies_list = [
     'beqcfgqd:zx2ta8sl24bs@91.217.72.56:6785',
     'beqcfgqd:zx2ta8sl24bs@103.37.181.190:6846',
@@ -130,7 +128,6 @@ proxies_list = [
     'beqcfgqd:zx2ta8sl24bs@45.38.78.112:6049',
 ]
 
-
 def fetch_page_with_proxy(
     url,
     proxies_list,
@@ -139,11 +136,6 @@ def fetch_page_with_proxy(
     max_tries=5,
     timeout=10
 ):
-    """
-    Try up to max_tries different proxies from proxies_list
-    until we get a successful (200) response. Returns the
-    requests.Response or raises after exhausting the pool.
-    """
     tried = set()
     attempts = min(max_tries, len(proxies_list))
     for _ in range(attempts):
@@ -168,14 +160,12 @@ def fetch_page_with_proxy(
             if resp.status_code == 200:
                 return resp
             else:
-                # non-200, try another proxy
                 continue
         except Exception:
-            # timeout, connection error, 403, etc.
             continue
 
-    # all proxies failed
     raise RuntimeError(f"All {len(tried)} proxies failed for {url}")
+
 def get_top_n_listings(
     url,
     proxies,
@@ -185,10 +175,6 @@ def get_top_n_listings(
     max_tries=5,
     timeout=10
 ):
-    """
-    Fetch `url` via proxy‐rotation, parse the first `n` <a class="card"> hrefs (absolute URLs).
-    Returns a list[str] of length <=n.
-    """
     resp = fetch_page_with_proxy(
         url,
         proxies_list=proxies,
@@ -202,10 +188,9 @@ def get_top_n_listings(
     return [urljoin(url, a["href"]) for a in anchors if a.get("href")]
 
 def run_scraper(module_name, scraper_dir="scrapers"):
-    # 1) peek at top-5 listing URLs
-    url      = FIRST_PAGE_URL.get(module_name)
+    url = FIRST_PAGE_URL.get(module_name)
     meta_json = os.path.join(DATA_DIR, f"{module_name}_top5.json")
-    top5     = None
+    top5 = None
 
     if url:
         try:
@@ -217,7 +202,6 @@ def run_scraper(module_name, scraper_dir="scrapers"):
                 n=5
             )
 
-            # if we've seen this exact top-5 before, skip
             if os.path.exists(meta_json):
                 with open(meta_json, "r") as f:
                     old_top5 = json.load(f)
@@ -225,14 +209,12 @@ def run_scraper(module_name, scraper_dir="scrapers"):
                     st.sidebar.info("✅ No new updates detected. Your dataset is already current, so the scrape has been skipped.")
                     return
 
-            # otherwise store the new top-5
             with open(meta_json, "w") as f:
                 json.dump(top5, f, indent=2)
 
         except Exception as e:
             st.sidebar.warning(f"Top-5 fetch failed: {e}\n→ running full scrape anyway.")
 
-    # 2) run the actual scraper script
     before = set(os.listdir(DATA_DIR))
     script = os.path.join(scraper_dir, f"{module_name}.py")
     try:
@@ -241,7 +223,6 @@ def run_scraper(module_name, scraper_dir="scrapers"):
         st.sidebar.error(f"Scraper error: {e}")
         return
 
-    # 3) report new CSV(s)
     added = set(os.listdir(DATA_DIR)) - before
     if added:
         for fn in added:
@@ -249,21 +230,12 @@ def run_scraper(module_name, scraper_dir="scrapers"):
     else:
         st.sidebar.info("No CSV produced.")
 
-
 import tiktoken
 
 groq_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 async def ask_agent(csv_text: str, question: str, model: str, chat_history: list) -> str:
-    """
-    Use provided CSV data and conversation history to answer the user's question.
-    If the CSV is too large for a single prompt, chunk it dynamically,
-    process each chunk, then synthesize a final coherent response.
-    """
-    # Determine backend
     use_groq = model.startswith("meta-llama/")
-
-    # Initialize tokenizer
     try:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
@@ -272,7 +244,6 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
     def count_tokens(text: str) -> int:
         return len(encoding.encode(text))
 
-    # Enhanced system prompt for clarity and structure
     system_prompt = (
         "You are a data-savvy AI assistant. "
         "Using ONLY the provided CSV data and conversation history, respond clearly and accurately to the user’s question. "
@@ -282,18 +253,15 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
         "- If information is missing, state it clearly."
     )
 
-    # Build conversation history
     history_context = "".join(
         f"{('User' if m['role']=='user' else 'Assistant')}: {m['content']}\n\n"
         for m in chat_history
     )
 
-    # Token budget settings
     MODEL_MAX = 16385
     HEADROOM = 512
     usable_tokens = MODEL_MAX - HEADROOM
 
-    # Calculate static token usage
     static_tokens = (
         count_tokens(system_prompt)
         + count_tokens("### Conversation History:\n")
@@ -302,7 +270,6 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
         + count_tokens(question)
     )
 
-    # Async helpers for each backend
     async def send_chat(prompt: str) -> str:
         client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         resp = await client.chat.completions.create(
@@ -327,7 +294,6 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
             return resp.choices[0].message.content.strip()
         return await asyncio.to_thread(run_sync)
 
-    # Helper to build the user prompt
     def make_prompt(csv_section: str) -> str:
         return (
             f"### Conversation History:\n{history_context}"
@@ -335,18 +301,15 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
             f"### User Question:\n{question}"
         )
 
-    # Attempt one-shot
     full_prompt = make_prompt(csv_text)
     if static_tokens + count_tokens(full_prompt) <= usable_tokens:
         return await (send_groq(full_prompt) if use_groq else send_chat(full_prompt))
 
-    # Otherwise, split into manageable chunks
     lines = csv_text.split("\n")
     header, rows = lines[0], lines[1:]
     avg_tokens_per_row = max(1, count_tokens("\n".join(rows)) // len(rows))
     rows_per_chunk = max(1, (usable_tokens - static_tokens) // avg_tokens_per_row)
 
-    # Adjust chunk size
     while True:
         chunks = [rows[i:i+rows_per_chunk] for i in range(0, len(rows), rows_per_chunk)]
         if all(
@@ -356,29 +319,34 @@ async def ask_agent(csv_text: str, question: str, model: str, chat_history: list
             break
         rows_per_chunk = max(1, rows_per_chunk // 2)
 
-    # Process chunks
     partials = []
     for chunk in chunks:
         prompt = make_prompt(header + "\n" + "\n".join(chunk))
         part = await (send_groq(prompt) if use_groq else send_chat(prompt))
         partials.append(part)
 
-    # Synthesize final answer
     synthesis = (
         "Please combine the following partial responses into a single, well-structured answer to the user's question:\n\n"
         + "\n---\n".join(partials)
     )
     return await (send_groq(synthesis) if use_groq else send_chat(synthesis))
 
+# ——— Function to create .docx file ———
+def create_docx(content: str) -> BytesIO:
+    doc = Document()
+    doc.add_heading("Assistant Response", level=1)
+    doc.add_paragraph(content)
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
-# ——— Streamlit App ———
 def main():
-    # ─── 0. Inject CSS ───
     st.markdown("""
     <style>
       .user-message {
-        border: 1px solid #6B7280;       /* gray-500 */
-        color: #F9FAFB;                  /* gray-50 */
+        border: 1px solid #6B7280;
+        color: #F9FAFB;
         padding: 0.75rem 1rem;
         border-radius: 0.375rem;
         margin: 0.5rem 0;
@@ -393,43 +361,10 @@ def main():
         st.session_state["query"] = ""
 
     st.sidebar.image("logo.png", width=200)
-    st.sidebar.header("🔁 Chat History")
 
-    chats = load_chats()
-    options = ["🆕 New Chat"] + [
-        c.get("title", c['id']) for c in chats
-    ]
-    default_idx = 0
-    if st.session_state.get("chat_id"):
-        default_idx = next(
-            (i+1 for i, c in enumerate(chats) if c["id"] == st.session_state.chat_id),
-            0
-        )
-    sel = st.sidebar.selectbox(
-        "Select chat",
-        options,
-        index=default_idx,
-        key="chat_select"
-    )
-    if sel == "🆕 New Chat":
-        # Reset context for new chat
-        st.session_state.chat_id = None
-        st.session_state.chat_history = []
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        existing_titles = {c.get("title", "") for c in chats}
-        unique_ts = ts
-        counter = 1
-        while unique_ts in existing_titles:
-            unique_ts = f"{ts}_{counter}"
-            counter += 1
-        st.session_state["new_chat_title"] = unique_ts
-    else:
-        idx = options.index(sel) - 1
-        st.session_state.chat_id = chats[idx]["id"]
-        st.session_state.chat_history = chats[idx]["messages"].copy()
+    scrapers = list_scrapers()
+    choice = st.sidebar.selectbox("Select Source", scrapers)
 
-    # ─── 2. Scraper & Model ───
-    st.sidebar.header("🕷️ Run Scraper")
     raw_model = st.sidebar.selectbox(
         "Model",
         ["gpt-3.5-turbo-16k", "Groq"],
@@ -437,10 +372,8 @@ def main():
     )
     model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
 
-    scrapers = list_scrapers()
-    choice = st.sidebar.selectbox("Select scraper", scrapers)
 
-    if st.sidebar.button("Run Scraper"):
+    if st.sidebar.button("Fetch Latest Content"):
         df = run_scraper(choice)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -461,7 +394,6 @@ def main():
         else:
             st.sidebar.error("Scraper did not return a DataFrame.")
 
-    # ─── Sidebar: Browse Past Data ───
     files = sorted(
         [f for f in os.listdir("data") if f.lower().endswith(".csv")],
         key=lambda f: os.path.getmtime(os.path.join("data", f)),
@@ -475,16 +407,53 @@ def main():
         f"{f} — {datetime.fromtimestamp(os.path.getmtime(os.path.join('data', f))).strftime('%Y-%m-%d %H:%M:%S')}"
         for f in files
     ]
-    sel = st.sidebar.selectbox("Browse past data", labels)
+    sel = st.sidebar.selectbox("Focus", labels)
     sel_file = files[labels.index(sel)]
     df = pd.read_csv(os.path.join("data", sel_file))
 
-    # ─── Main UI: Show Dataset & Ask Agent ───
+    chats = load_chats()
+    options = ["🆕 New Article Thread"] + [
+        c.get("title", c['id']) for c in chats
+    ]
+    default_idx = 0
+    if st.session_state.get("chat_id"):
+        default_idx = next(
+            (i+1 for i, c in enumerate(chats) if c["id"] == st.session_state.chat_id),
+            0
+        )
+    sel = st.sidebar.selectbox(
+        "Article Threads",
+        options,
+        index=default_idx,
+        key="chat_select"
+    )
+    if sel == "🆕 New Article Thread":
+        st.session_state.chat_id = None
+        st.session_state.chat_history = []
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        existing_titles = {c.get("title", "") for c in chats}
+        unique_ts = ts
+        counter = 1
+        while unique_ts in existing_titles:
+            unique_ts = f"{ts}_{counter}"
+            counter += 1
+        st.session_state["new_chat_title"] = unique_ts
+    else:
+        idx = options.index(sel) - 1
+        st.session_state.chat_id = chats[idx]["id"]
+        st.session_state.chat_history = chats[idx]["messages"].copy()
+
+    # raw_model = st.sidebar.selectbox(
+    #     "Model",
+    #     ["gpt-3.5-turbo-16k", "Groq"],
+    #     key="model_select"
+    # )
+    # model = raw_model if raw_model != "Groq" else "meta-llama/llama-4-scout-17b-16e-instruct"
+
     st.subheader(f"Dataset: {sel_file}")
     st.dataframe(df)
     st.markdown("---")
 
-    # ─── Predefined Prompts ───
     st.sidebar.header("Predefined Prompts")
     predef_prompts = [
         "Summarize the key insights from this dataset.",
@@ -502,7 +471,6 @@ def main():
             args=(p,)
         )
 
-    # ─── Chat Form ───
     with st.form("chat_form", clear_on_submit=False):
         query = st.text_input("Ask anything—article, summary, insight…", key="query")
         submitted = st.form_submit_button("Ask Agent")
@@ -526,12 +494,21 @@ def main():
             except AttributeError:
                 st.rerun()
 
-    # ─── Display Chat ───
-    for msg in st.session_state.chat_history:
+    # ——— Display Chat with Download Buttons ———
+    for i, msg in enumerate(st.session_state.chat_history):
         if msg["role"] == "user":
             st.markdown(f'<div class="user-message">👤 {msg["content"]}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f"**🤖** {msg['content']}")
+            # Create .docx file for the assistant's response
+            docx_buffer = create_docx(msg["content"])
+            st.download_button(
+                label="Save Article Draft",
+                data=docx_buffer,
+                file_name=f"Article_{i}_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"download_{i}"
+            )
 
     st.markdown("---")
 
