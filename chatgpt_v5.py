@@ -493,7 +493,7 @@ def main():
                 st.rerun()
 
     # ——— Display Chat with Download Buttons ———
-    for i, msg in enumerate(reversed(st.session_state.chat_history)):
+    for i, msg in enumerate(st.session_state.chat_history):
         if msg["role"] == "user":
             st.markdown(f'<div class="user-message">👤 {msg["content"]}</div>', unsafe_allow_html=True)
         else:
