@@ -119,16 +119,17 @@ common_cookies = {
 import random
 # ─── new: your proxy pool ───
 proxies_list = [
-    '91.217.72.56:6785',
-    '103.37.181.190:6846',
-    '45.43.183.159:6471',
-    '64.137.18.245:6439',
-    '104.238.50.211:6757',
-    '89.249.192.133:6532',
-    '103.101.88.235:5959',
-    '145.223.45.130:6983',
-    '45.38.78.112:6049',
+    'beqcfgqd:zx2ta8sl24bs@91.217.72.56:6785',
+    'beqcfgqd:zx2ta8sl24bs@103.37.181.190:6846',
+    'beqcfgqd:zx2ta8sl24bs@45.43.183.159:6471',
+    'beqcfgqd:zx2ta8sl24bs@64.137.18.245:6439',
+    'beqcfgqd:zx2ta8sl24bs@104.238.50.211:6757',
+    'beqcfgqd:zx2ta8sl24bs@89.249.192.133:6532',
+    'beqcfgqd:zx2ta8sl24bs@103.101.88.235:5959',
+    'beqcfgqd:zx2ta8sl24bs@145.223.45.130:6983',
+    'beqcfgqd:zx2ta8sl24bs@45.38.78.112:6049',
 ]
+
 
 def fetch_page_with_proxy(
     url,
